@@ -26,7 +26,7 @@
 		document.head.appendChild(style);
 	}
 
-	// Show floating message
+	// Show floating message (screen reader friendly)
 	function showMessage(msg) {
 		let box = document.createElement("div");
 		box.className = "___bookmarklet_message___";
@@ -72,12 +72,76 @@
 		}
 	}
 
+	// Copy text to clipboard
+	function copyToClipboard(text) {
+		navigator.clipboard.writeText(text).catch(() => {
+			// fallback
+			const textarea = document.createElement("textarea");
+			textarea.value = text;
+			document.body.appendChild(textarea);
+			textarea.select();
+			document.execCommand("copy");
+			textarea.remove();
+		});
+	}
+
+	// Generate unique selector
+	function getUniqueSelector(el) {
+		if (el.id) return `#${el.id}`;
+		if (el === document.body) return "body";
+
+		let path = [];
+		while (el && el.nodeType === 1 && el !== document.body) {
+			let selector = el.nodeName.toLowerCase();
+			if (el.className) {
+				let classes = el.className.trim().split(/\s+/).join(".");
+				if (classes) selector += "." + classes;
+			}
+			let sibling = el;
+			let nth = 1;
+			while ((sibling = sibling.previousElementSibling)) {
+				if (sibling.nodeName.toLowerCase() === el.nodeName.toLowerCase()) nth++;
+			}
+			selector += `:nth-of-type(${nth})`;
+			path.unshift(selector);
+			el = el.parentNode;
+		}
+		return path.length ? path.join(" > ") : null;
+	}
+
 	// Remove all highlights
 	function removeHighlights() {
 		const els = document.querySelectorAll("." + HIGHLIGHT_CLASS);
 		let count = els.length;
 		els.forEach((el) => el.classList.remove(HIGHLIGHT_CLASS));
 		showMessage(`Removed highlight from ${count} elements`);
+	}
+
+	// Copy outerHTML
+	function copyOuterHTML() {
+		const els = document.querySelectorAll("." + HIGHLIGHT_CLASS);
+		if (els.length > 0) {
+			let htmlList = [];
+			els.forEach((el, idx) => {
+				htmlList.push(`${idx + 1}. ${el.outerHTML}`);
+			});
+			copyToClipboard(htmlList.join("\n\n"));
+			showMessage(`Copied outerHTML of ${els.length} elements`);
+		} else {
+			showMessage("No highlights found for source code");
+		}
+	}
+
+	// Copy unique selectors
+	function copySelectors() {
+		const els = document.querySelectorAll("." + HIGHLIGHT_CLASS);
+		if (els.length > 0) {
+			const selectors = Array.from(els).map(getUniqueSelector);
+			copyToClipboard(selectors.join(", "));
+			showMessage(`Copied selectors of ${els.length} elements`);
+		} else {
+			showMessage("No highlights found for selectors");
+		}
 	}
 
 	// Attach keydown listener once
@@ -91,8 +155,18 @@
 				e.preventDefault();
 				removeHighlights();
 			}
+			if (e.altKey && e.code === "KeyS") {
+				e.preventDefault();
+				copyOuterHTML();
+			}
+			if (e.altKey && e.code === "KeyE") {
+				e.preventDefault();
+				copySelectors();
+			}
 		});
 		window.___bookmarklet_listener_attached___ = true;
-		showMessage("Bookmarklet active: ALT+C to toggle, ALT+R to clear");
+		showMessage(
+			"Bookmarklet active: ALT+C toggle, ALT+R clear, ALT+S copy HTML, ALT+E copy selectors"
+		);
 	}
 })();
